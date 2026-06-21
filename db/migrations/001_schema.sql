@@ -5,7 +5,7 @@ CREATE TABLE organizations (
     display_name            TEXT        NOT NULL,
     legal_name              TEXT,
     country_code            TEXT        NOT NULL DEFAULT 'AU',
-    currency                TEXT        NOT NULL DEFAULT 'USD',
+    currency                TEXT        NOT NULL DEFAULT 'AUD',
     timezone                TEXT        NOT NULL DEFAULT 'UTC',
     fiscal_year_start_month INT         NOT NULL DEFAULT 1 CHECK (fiscal_year_start_month BETWEEN 1 AND 12),
     registration_no         TEXT,
@@ -26,7 +26,8 @@ CREATE TABLE users (
     password_hash TEXT        NOT NULL,
     name          TEXT        NOT NULL,
     is_active     BOOLEAN     NOT NULL DEFAULT true,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE roles (
@@ -37,6 +38,7 @@ CREATE TABLE roles (
     permissions TEXT[]      NOT NULL DEFAULT '{}',
     is_system   BOOLEAN     NOT NULL DEFAULT false,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE NULLS NOT DISTINCT (org_id, name)
 );
 
@@ -47,6 +49,7 @@ CREATE TABLE org_members (
     role_id   UUID        NOT NULL REFERENCES roles(id),
     is_active BOOLEAN     NOT NULL DEFAULT true,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, org_id)
 );
 
@@ -67,6 +70,7 @@ CREATE TABLE accounts (
     type       TEXT        NOT NULL CHECK (type IN ('asset','liability','equity','income','expense')),
     is_active  BOOLEAN     NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (org_id, code)
 );
 
@@ -78,7 +82,8 @@ CREATE TABLE contacts (
     phone      TEXT,
     type       TEXT        NOT NULL CHECK (type IN ('customer','supplier','both')),
     is_active  BOOLEAN     NOT NULL DEFAULT true,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE invoices (
@@ -94,7 +99,7 @@ CREATE TABLE invoices (
     tax_amount   NUMERIC(15,2) NOT NULL DEFAULT 0,
     total        NUMERIC(15,2) NOT NULL DEFAULT 0,
     amount_due   NUMERIC(15,2) NOT NULL DEFAULT 0,
-    currency     TEXT          NOT NULL DEFAULT 'USD',
+    currency     TEXT          NOT NULL DEFAULT 'AUD',
     notes        TEXT,
     created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -127,7 +132,7 @@ CREATE TABLE bills (
     tax_amount   NUMERIC(15,2) NOT NULL DEFAULT 0,
     total        NUMERIC(15,2) NOT NULL DEFAULT 0,
     amount_due   NUMERIC(15,2) NOT NULL DEFAULT 0,
-    currency     TEXT          NOT NULL DEFAULT 'USD',
+    currency     TEXT          NOT NULL DEFAULT 'AUD',
     notes        TEXT,
     created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
@@ -180,6 +185,24 @@ CREATE TABLE journal_lines (
     line_no      INT           NOT NULL
 );
 
+-- updated_at trigger (shared function, one trigger per table)
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_organizations_updated_at BEFORE UPDATE ON organizations FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_users_updated_at         BEFORE UPDATE ON users         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_roles_updated_at         BEFORE UPDATE ON roles         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_org_members_updated_at   BEFORE UPDATE ON org_members   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_accounts_updated_at      BEFORE UPDATE ON accounts      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_contacts_updated_at      BEFORE UPDATE ON contacts      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_invoices_updated_at      BEFORE UPDATE ON invoices      FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_bills_updated_at         BEFORE UPDATE ON bills         FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE INDEX idx_org_members_user    ON org_members(user_id);
 CREATE INDEX idx_org_members_org     ON org_members(org_id);
 CREATE INDEX idx_roles_org           ON roles(org_id);
@@ -192,6 +215,16 @@ CREATE INDEX idx_journal_lines_entry ON journal_lines(entry_id);
 CREATE INDEX idx_journal_lines_acct  ON journal_lines(account_code);
 
 -- +goose Down
+DROP TRIGGER IF EXISTS trg_bills_updated_at         ON bills;
+DROP TRIGGER IF EXISTS trg_invoices_updated_at      ON invoices;
+DROP TRIGGER IF EXISTS trg_contacts_updated_at      ON contacts;
+DROP TRIGGER IF EXISTS trg_accounts_updated_at      ON accounts;
+DROP TRIGGER IF EXISTS trg_org_members_updated_at   ON org_members;
+DROP TRIGGER IF EXISTS trg_roles_updated_at         ON roles;
+DROP TRIGGER IF EXISTS trg_users_updated_at         ON users;
+DROP TRIGGER IF EXISTS trg_organizations_updated_at ON organizations;
+DROP FUNCTION IF EXISTS set_updated_at;
+
 DROP TABLE IF EXISTS journal_lines;
 DROP TABLE IF EXISTS journal_entries;
 DROP TABLE IF EXISTS payments;
