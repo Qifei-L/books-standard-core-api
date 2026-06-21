@@ -13,17 +13,19 @@ type LoginResponse struct {
 }
 
 type UserInfo struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
-	Role  string `json:"role"`
-	OrgID string `json:"orgId"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Email       string   `json:"email"`
+	Role        string   `json:"role"`
+	OrgID       string   `json:"orgId"`
+	Permissions []string `json:"permissions"`
 }
 
 type Claims struct {
-	UserID string `json:"userId"`
-	OrgID  string `json:"orgId"`
-	Role   string `json:"role"`
+	UserID      string   `json:"userId"`
+	OrgID       string   `json:"orgId"`
+	Role        string   `json:"role"`
+	Permissions []string `json:"permissions"`
 	jwt.RegisteredClaims
 }
 

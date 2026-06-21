@@ -1,6 +1,6 @@
 # Data Model
 
-Version: 0.1  
+Version: 0.2  
 Date: 2026-06-21
 
 ---
@@ -9,8 +9,9 @@ Date: 2026-06-21
 
 ```
 organizations
-├── users
-│   └── refresh_tokens
+├── roles (org_id=NULL = system roles)
+├── org_members → users
+│                └── refresh_tokens
 ├── accounts
 ├── contacts
 ├── invoices
@@ -32,28 +33,93 @@ organizations
 | 列 | 类型 | 说明 |
 |----|------|------|
 | id | UUID PK | |
-| name | TEXT NOT NULL | 公司名称 |
+| display_name | TEXT NOT NULL | 显示名称 |
+| legal_name | TEXT | 法定名称 |
+| country_code | TEXT DEFAULT 'AU' | 国家/地区代码 |
 | currency | TEXT DEFAULT 'USD' | 默认币种 |
+| timezone | TEXT DEFAULT 'UTC' | 时区 |
+| fiscal_year_start_month | INT DEFAULT 1 | 财年起始月（1=Jan … 12=Dec） |
+| registration_no | TEXT | 营业执照号 / ABN / 工商注册号 |
+| address | TEXT | 地址 |
+| phone | TEXT | 电话 |
+| email | TEXT | 联系邮箱 |
+| logo_url | TEXT | Logo 图片 URL |
+| slug | TEXT UNIQUE | 子域名标识（未来用于 acme.books.com） |
+| settings | JSONB DEFAULT '{}' | 可扩展的组织配置 |
+| is_active | BOOLEAN DEFAULT true | 停用的组织不可登录 |
 | created_at | TIMESTAMPTZ | |
+| updated_at | TIMESTAMPTZ | |
 
 **说明：** 每个租户一行。所有业务表都通过 `org_id` 隔离。
 
 ---
 
-### users — 用户
+### users — 全局用户账户
 
 | 列 | 类型 | 说明 |
 |----|------|------|
 | id | UUID PK | |
-| org_id | UUID FK → organizations | |
 | email | TEXT UNIQUE NOT NULL | 登录邮箱，全局唯一 |
 | password_hash | TEXT NOT NULL | bcrypt |
 | name | TEXT NOT NULL | 显示名 |
-| role | TEXT DEFAULT 'admin' | admin / accountant / viewer |
 | is_active | BOOLEAN DEFAULT true | 停用不可登录 |
 | created_at | TIMESTAMPTZ | |
 
-**约束：** 一个邮箱只属于一个组织。
+**说明：** 不再绑定单一组织。一个邮箱可通过 `org_members` 加入多个组织。
+
+---
+
+### roles — 权限角色
+
+| 列 | 类型 | 说明 |
+|----|------|------|
+| id | UUID PK | |
+| org_id | UUID FK → organizations | NULL = 系统内置角色（所有组织共用） |
+| name | TEXT NOT NULL | 角色名称 |
+| description | TEXT | 描述 |
+| permissions | TEXT[] DEFAULT '{}' | 权限列表，支持通配符 |
+| is_system | BOOLEAN DEFAULT false | true = 不可删除 |
+| created_at | TIMESTAMPTZ | |
+
+**约束：** UNIQUE NULLS NOT DISTINCT (org_id, name) — 同一组织内角色名唯一；系统角色全局唯一。
+
+**系统内置角色（org_id = NULL）：**
+
+| 角色 | permissions |
+|------|-------------|
+| admin | `{*}` — 所有权限 |
+| accountant | 发票/账单/付款/联系人/科目查看/报表/手工凭证 |
+| viewer | 所有模块只读 |
+
+**权限命名空间：**
+```
+invoices.read   invoices.write   invoices.approve   invoices.void
+bills.read      bills.write      bills.approve      bills.void
+payments.read   payments.write
+contacts.read   contacts.write
+accounts.read   accounts.write
+reports.read
+journal.read    journal.write    journal.void
+settings.read   settings.write
+members.read    members.invite   members.manage
+```
+
+通配符规则：`invoices.*` 匹配所有 `invoices.` 开头的权限；`*` 匹配一切。
+
+---
+
+### org_members — 组织成员关系
+
+| 列 | 类型 | 说明 |
+|----|------|------|
+| id | UUID PK | |
+| user_id | UUID FK → users ON DELETE CASCADE | |
+| org_id | UUID FK → organizations ON DELETE CASCADE | |
+| role_id | UUID FK → roles | |
+| is_active | BOOLEAN DEFAULT true | 停用成员不可登录该组织 |
+| joined_at | TIMESTAMPTZ | |
+
+**约束：** UNIQUE (user_id, org_id) — 每个用户在同一组织只有一个成员记录。
 
 ---
 
@@ -63,6 +129,7 @@ organizations
 |----|------|------|
 | id | UUID PK | |
 | user_id | UUID FK → users ON DELETE CASCADE | |
+| org_id | UUID FK → organizations ON DELETE CASCADE | 记录用户选择的组织 |
 | token_hash | TEXT UNIQUE NOT NULL | SHA-256(rawToken) |
 | expires_at | TIMESTAMPTZ NOT NULL | 30 天 |
 | created_at | TIMESTAMPTZ | |
@@ -163,9 +230,6 @@ DR  1100 AR            total
 | amount | NUMERIC(15,2) NOT NULL | quantity × unit_price（不含税） |
 | account_code | TEXT NOT NULL | 对应收入科目 |
 | line_no | INT NOT NULL | 行号，从 1 开始 |
-
-**待补充字段（v0.2）：**
-- `item_id UUID FK → items` — 关联产品/服务
 
 ---
 

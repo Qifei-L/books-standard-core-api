@@ -71,10 +71,10 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 		_ = h.svc.Logout(r.Context(), cookie.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:    refreshCookie,
-		Value:   "",
-		MaxAge:  -1,
-		Path:    "/api/auth",
+		Name:     refreshCookie,
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/api/auth",
 		HttpOnly: true,
 	})
 	w.WriteHeader(http.StatusNoContent)
@@ -86,9 +86,10 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusUnauthorized, "UNAUTHORIZED", "not authenticated")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, map[string]string{
-		"userId": claims.UserID,
-		"orgId":  claims.OrgID,
-		"role":   claims.Role,
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"userId":      claims.UserID,
+		"orgId":       claims.OrgID,
+		"role":        claims.Role,
+		"permissions": claims.Permissions,
 	})
 }

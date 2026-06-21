@@ -37,6 +37,13 @@ func OrgIDFrom(ctx context.Context) string {
 	return ""
 }
 
+func PermissionsFrom(ctx context.Context) []string {
+	if c := ClaimsFrom(ctx); c != nil {
+		return c.Permissions
+	}
+	return nil
+}
+
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
